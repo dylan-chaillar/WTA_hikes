@@ -1,0 +1,104 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+#import csv and fix some weirdness with the tags column
+trails = pd.read_csv('trails_data.csv',sep='\t')
+trails['features'] = trails['features'].str.replace('[','')
+trails['features'] = trails['features'].str.replace(']','')
+trails['features'] = trails['features'].str.replace('"','')
+
+#Specify that trails without a required pass require no pass (this will help with graphing later
+trails['requiredpass'] = trails['requiredpass'].fillna('None')
+
+#ignore rating where there are no votes
+for i in range(0,len(trails)):
+    if trails['votes'].iloc[i] == 0:
+        trails['rating'].iloc[i] = np.NaN
+
+
+
+feats = trails['features']
+feats_sep = trails['features'].str.split(',',expand=True)
+
+feats_vals = feats_sep[0].value_counts()
+
+
+#add boolean dummy categories for all of the tags and required passes
+trails['Mountain Views'] = trails['features'].str.contains('Mountain')
+trails['Dog Friendly'] = trails['features'].str.contains('Dogs')
+trails['Wildflowers'] = trails['features'].str.contains('Wildflowers')
+trails['Kid Friendly'] = trails['features'].str.contains('kids')
+trails['Wildlife'] = trails['features'].str.contains('Wildlife')
+trails['Lakes'] = trails['features'].str.contains('Lakes')
+trails['Rivers'] = trails['features'].str.contains('Rivers')
+trails['Old Growth'] = trails['features'].str.contains('growth')
+trails['Summit'] = trails['features'].str.contains('Summits')
+trails['Ridge'] = trails['features'].str.contains('Ridges')
+trails['Fall Folliage'] = trails['features'].str.contains('Fall')
+trails['Campground'] = trails['features'].str.contains('campsites')
+trails['Waterfall'] = trails['features'].str.contains('Waterfalls')
+trails['Coastal'] = trails['features'].str.contains('Coast')
+trails['Northwest Forest Pass'] = trails['requiredpass'].str.contains('Northwest')
+trails['Discover Pass'] = trails['requiredpass'].str.contains('Discover')
+trails['Sno-Park Permit'] = trails['requiredpass'].str.contains('Sno-Park')
+trails['None'] = trails['requiredpass'].str.contains('None')
+trails['National Park Pass'] = trails['requiredpass'].str.contains('National Park Pass')
+
+#initialize summary statistics dataframe
+cat_data = pd.DataFrame({'Categories':[],'Mean Length':[],'Mean Elevation Gain':[],'Total Votes':[],'Number of Hikes':[]})
+
+#find the category, length, elevation gain, votes, rating, and frequency for each category I'm interested in.  15-29 are the dummy categories for the tags
+for col in trails[trails.columns[15:29]]:
+    temp = pd.DataFrame({'Categories':[col],
+                         'Mean Length':[np.around(trails[trails[col]]['length'].mean(),2)],
+                         'Mean Elevation Gain':[int(np.around(trails[trails[col]]['elevation_gain'].mean(),0))],
+                         'Total Votes' : [int(trails[trails[col]]['votes'].sum())],
+                         'Mean Rating' : [np.around(np.mean(trails[trails[col]]['rating']*trails[trails[col]]['votes'])/trails[trails[col]]['votes'].mean(),2)],
+                         'Number of Hikes' : [int(len(trails[trails[col]]))]})
+
+    cat_data = pd.concat([cat_data,temp])
+
+#print summary statistics ordered by frequency of tag descending.  Note that individual hikes will be counted in multiple categories if they have multiple tags
+print(cat_data.sort_values(by='Number of Hikes', ascending=False))
+
+
+
+#graphing some distributions
+
+#need 15 subplots for all of the categories
+fig, ax = plt.subplots(nrows=2,ncols=7,sharey=True,figsize = [20,10])    
+
+#change theme
+sns.set_style('dark')
+sns.set_theme('talk')
+
+#set to day hikes because the longer ones make it harder to see the differences in distribution
+trails = trails[trails['length'] < 30]
+
+#handpicked some colors
+colors  = ['dimgrey','sienna','goldenrod','deeppink',
+           'mediumseagreen','navy','darkturquoise','darkgreen',
+           'whitesmoke','darkslateblue','darkorange','firebrick','aquamarine','khaki']
+
+#labels should correspond to the colors and the columns of the dataframe
+labels = ['Mountain Views','Dog Friendly','Wildflowers','Kid Friendly','Wildlife','Lake',
+          'River','Old Growth', 'Summit','Ridge', 'Fall Foliage', 'Campground', 'Waterfall','Coastal']
+
+#plot the first row of violinplots. only label the first y-axis because the others will share a y-axis anyway
+for col, j in zip(trails[trails.columns[15:22]],range(0,7)):
+        sns.violinplot(data= trails[trails[col]],y='elevation_gain', ax=ax[0,j], color=colors[j], cut=0)
+        ax[0,j].set_xlabel(labels[j])
+        if j > 0: ax[0,j].set_ylabel('')
+        else: ax[0,j].set_ylabel('Elevation Gain (ft)')
+        
+#plot the second row of violinplots
+for col, j in zip(trails[trails.columns[22:29]],range(0,7)):
+        sns.violinplot(data= trails[trails[col]],y='elevation_gain', ax=ax[1,j], color=colors[7+j], cut=0)
+        ax[1,j].set_xlabel(labels[j+7])
+        if j > 0: ax[1,j].set_ylabel('')
+        else: ax[1,j].set_ylabel('Elevation Gain (ft)')
+
+#supertitle
+fig.suptitle('Elevation Gain Distribution of different Categories of Day Hikes')
